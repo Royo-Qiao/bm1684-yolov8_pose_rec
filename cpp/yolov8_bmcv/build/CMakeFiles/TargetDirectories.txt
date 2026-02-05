@@ -1,0 +1,3 @@
+/data/Yolov8 Pose_Rec/cpp/yolov8_bmcv/build/CMakeFiles/rebuild_cache.dir
+/data/Yolov8 Pose_Rec/cpp/yolov8_bmcv/build/CMakeFiles/edit_cache.dir
+/data/Yolov8 Pose_Rec/cpp/yolov8_bmcv/build/CMakeFiles/yolov8_bmcv.soc.dir
