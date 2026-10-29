@@ -1,4 +1,26 @@
-# Yolov8 Pose Estimation
+# YOLOv8 Pose：SOPHON BM1684 / BM1684X 姿态与跌倒检测
+
+
+面向 SOPHON TPU 的 C++ / BMCV 例程，使用 YOLOv8 Pose 提取人体关键点，并在视频后处理中实现简单的跌倒判定。适合需要阅读模型转换、PCIe/SoC 构建与视频推理流程的开发者。
+
+YOLOv8 pose estimation and a simple fall-detection demo for SOPHON BM1684/BM1684X, with BMCV preprocessing and C++ inference.
+
+## 从哪里开始
+
+- [构建入口](cpp/yolov8_bmcv/CMakeLists.txt)：`TARGET_ARCH=pcie`（默认）或 `soc`；SoC 构建需要 `SDK` 路径和 aarch64 工具链。
+- [程序参数与输入分支](cpp/yolov8_bmcv/main.cpp)：`--input`、`--bmodel`、`--dev_id`、`--conf_thresh`、`--nms_thresh`、`--classnames`。
+- [推理与姿态后处理](cpp/yolov8_bmcv/yolov8.cpp)：模型执行、关键点绘制和跌倒相关逻辑。
+- `models/` 保存现有 ONNX / BModel；`datasets/` 保存现有视频与类别文件；`pics/` 为原有流程截图。
+
+本次文档整理仅静态核对源码、目录与命令，没有连接 TPU、重新编译模型或测量帧率。下方截图和既有结果是仓库原有资料，不是本轮重测。
+
+## 已知使用边界
+
+- 需要匹配的 libsophon、sophon-opencv、sophon-ffmpeg 和硬件环境，普通 CPU/macOS 环境不能直接替代。
+- 请选择与芯片和运行时匹配的 BModel。当前默认代码中的 `models/BM1684X/...` 路径与仓库目录不一致，应显式传入实际存在的模型。
+- 当前仓库没有 `datasets/test` 目录。图片输入需换成你准备的图片目录；视频可使用已有 `datasets/dance_1080P.mp4` 等文件。
+- `main.cpp` 的现有输入检查可能提前拒绝 RTSP 地址；该路径仍需处理/实机验证，不应仅凭示例宣称可用。
+- 跌倒判定是演示性后处理，未提供通用准确率、召回率或安全场景保证。当前仓库没有根目录 LICENSE，使用代码、模型及第三方组件前请核对各自授权。
 
 ## 目录
 * [1. 简介](#简介)
@@ -12,7 +34,7 @@
 
 本例程是基于国产比特大陆AI芯片BM1684和BM1684X完成YOLOv8肢体关节点检测提取的算法移植，同时后处理实现简单的实时视频的跌倒检测任务。
 
-其中，模型文件存放在models文件夹下；测试图片和视频存放在datasets文件夹下；程序代码存放在/cpp/yolov8_bmcv/下。
+其中，模型文件存放在models文件夹下；测试视频与类别文件存放在datasets文件夹下；程序代码存放在/cpp/yolov8_bmcv/下。
 
 
 ## 环境准备
@@ -47,7 +69,7 @@
 
 2. 打包libsophon
 
-    从[算能官网](https://developer.sophgo.com/site/index/material/28/all.html)上下载符合[环境依赖](../README.md#环境依赖)的sophon-img安装包，其中包括libsophon_soc_x.y.z_aarch64.tar.gz，x.y.z表示版本号，并进行解压。
+    从[算能官网](https://developer.sophgo.com/site/index/material/28/all.html)上下载符合[环境准备](#环境准备)的sophon-img安装包，其中包括libsophon_soc_x.y.z_aarch64.tar.gz，x.y.z表示版本号，并进行解压。
 
     ```bash
     # 创建依赖文件的根目录
@@ -61,7 +83,7 @@
 
 3. 打包sophon-ffmpeg和sophon-opencv
 
-    从[算能官网](https://developer.sophgo.com/site/index/material/28/all.html)上下载符合[环境依赖](../README.md#环境依赖)的sophon-mw安装包，其中包括sophon-mw-soc_x.y.z_aarch64.tar.gz，x.y.z表示版本号，并进行解压。
+    从[算能官网](https://developer.sophgo.com/site/index/material/28/all.html)上下载符合[环境准备](#环境准备)的sophon-mw安装包，其中包括sophon-mw-soc_x.y.z_aarch64.tar.gz，x.y.z表示版本号，并进行解压。
     ```bash
     # 解压sophon-mw-soc_x.y.z_aarch64.tar.gz
     tar -zxf sophon-mw-soc_${x.y.z}_aarch64.tar.gz
@@ -87,7 +109,7 @@ https://doc.sophgo.com/sdk-docs/v23.09.01-lts/docs_latest_release/docs/tpu-mlir/
 ```python
 from ultralytics import YOLO
 # Load a model
-model = YOLO("yolov8s.pt")  # 载入预训练模型
+model = YOLO("yolov8s-pose.pt")  # 载入预训练模型
 # Export the model
 success = model.export(format="onnx", batch=1)  # 导出静态ONNX模型，需设置batch参数
 ```
@@ -101,7 +123,7 @@ __ONNX转MLIR__
 生成文件如下：
 ![Alt text](pics/image-1.png)
 
-__MLIR转FP32__
+__MLIR转F16__
 
 model_deploy --mlir yolov8s-pose.mlir --quantize F16 --processor bm1684x --model yolov8s-pose_1684x_f16.bmodel --test_input yolov8s-pose_in_f32.npz --test_reference yolov8s-pose_top_outputs.npz
 
@@ -112,9 +134,9 @@ __生成校准表__
 
 run_calibration yolov8s-pose.mlir --dataset ../COCO2017 --input_num 100 -o yolov8s-pose_cali_table
 
-生成文件yolov5s_cali_table,用于后续编译 INT8 模型的输入文件
+生成文件 yolov8s-pose_cali_table，用于后续编译 INT8 模型的输入文件。
 
-__FP32转INT8__
+__MLIR转INT8__
 
 model_deploy \
 --mlir yolov8s-pose.mlir \
@@ -200,10 +222,10 @@ Usage: yolov8_bmcv.pcie [params]
 测试结束后，会将预测的图片保存在`results/images`下，预测的结果保存在`results/yolov8s_fp32_1b.bmodel_test_bmcv_cpp_result.json`下，同时会打印预测结果、推理时间等信息。
 
 ### 测试视频
-视频测试实例如下，支持对视频流(包括rtsp流)进行测试。
+视频文件调用示例如下。RTSP 地址仅为参数格式示例；当前输入检查仍需处理上述已知问题，尚未验证其可用性。
 ```bash
 ./yolov8_bmcv.soc --input=../../datasets/dance_1080P.mp4  --bmodel=../../models/yolov8s-pose_1684x_f16.bmodel --conf_thresh=0.25 --nms_thresh=0.7
 
-./yolov8_bmcv.soc --input=rtsp://admin:xjtu1234@192.168.1.93:554/h264/ch1/main/av_stream --bmodel=../../models/yolov8s-pose_1684x_f16.bmodel  --dev_id=0 --conf_thresh=0.25 --nms_thresh=0.7 --classnames=../../datasets/coco.names
+./yolov8_bmcv.soc --input=rtsp://USER:PASSWORD@CAMERA_HOST:554/STREAM_PATH --bmodel=../../models/yolov8s-pose_1684x_f16.bmodel  --dev_id=0 --conf_thresh=0.25 --nms_thresh=0.7 --classnames=../../datasets/coco.names
 ```
 测试结束后，会生成并保存在`results/videos`中，同时会打印预测结果、推理时间、帧率等信息。
